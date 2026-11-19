@@ -34,6 +34,6 @@ npm test && npm run -s migrate
    Save as `data/leads-YYYY-MM-DD-public-web.csv`, run `npm run import:leads -- <file> --dry-run`, then for real.
 3. **Refresh the dashboard.** `npm run -s export:dashboard`, then one `ArtifactData batch`:
    `set dash/snapshot` (pin its version) and `set approvals/<id>` for each approval (pin existing versions).
-4. **Commit** new CSVs: `git add data && git commit -m "Growth Desk: leads YYYY-MM-DD" && git push origin ccr-1a360ae7-hr64vd`
-   (end the commit message with the session's attribution lines).
+4. **Do not commit or push.** Scheduled runs can't write to the repo; the Growth OS database is the record.
+   Lead CSVs stay in the run's temporary workspace only.
 5. **Report** in 3–5 lines: leads added (by area), decisions applied, anything blocked.
