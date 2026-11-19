@@ -14,7 +14,8 @@
     "approvals": "tsx src/cli/approvals.ts",
     "start": "tsx src/web/server.ts",
     "hash-password": "tsx src/cli/hash-password.ts",
-    "demo": "tsx src/web/demo.ts"
+    "demo": "tsx src/web/demo.ts",
+    "export:dashboard": "tsx src/cli/export-dashboard.ts"
   },
   "engines": {
     "node": ">=20"
