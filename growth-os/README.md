@@ -47,7 +47,7 @@ npm run kb:check   # validate knowledge base; scripts may not contain ₹/% figu
 ```
 
 ## To go live (founder checklist)
-1. Create a separate Supabase project and run `db/migrations/0001_growth_os.sql`.
+1. ✅ Separate Supabase project `niwasnest-growth-os` (ref `rznsuobewwmmvbvfatuc`, Mumbai) created; `0001_growth_os.sql` applied on 2026-11-19 — 24 tables, RLS on all, audit log append-only.
 2. Create a **staff account** (marketing role) in the main app for Growth OS and put its token in `.env` (see `.env.example`). Keep `NIWASNEST_API_WRITES_ENABLED=false` at first.
 3. Add a Gemini API key and set `LLM_PROVIDER=gemini`.
 4. Approve `knowledge/80-referrals.md` (set `approved: true`) once the amounts match what the app pays.

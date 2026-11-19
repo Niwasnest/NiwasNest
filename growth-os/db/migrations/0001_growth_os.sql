@@ -211,3 +211,13 @@ create or replace function forbid_change() returns trigger language plpgsql as $
 begin raise exception 'append-only table'; end $$;
 create trigger agent_actions_append_only before update or delete on agent_actions for each row execute function forbid_change();
 create trigger lead_events_append_only before update or delete on lead_events for each row execute function forbid_change();
+
+-- Supabase exposes `public` over its REST API. Enable RLS with no policies on every table so the
+-- public (anon) key can read nothing; only the Growth OS server (service role) has access.
+do $$
+declare t record;
+begin
+  for t in select tablename from pg_tables where schemaname = 'public' loop
+    execute format('alter table public.%I enable row level security', t.tablename);
+  end loop;
+end $$;
