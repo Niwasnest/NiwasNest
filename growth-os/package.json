@@ -8,18 +8,23 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "brief": "tsx src/cli/brief.ts",
-    "kb:check": "tsx src/cli/kb-check.ts"
+    "kb:check": "tsx src/cli/kb-check.ts",
+    "migrate": "tsx src/cli/migrate.ts",
+    "import:leads": "tsx src/cli/import-leads.ts",
+    "approvals": "tsx src/cli/approvals.ts"
   },
   "engines": {
     "node": ">=20"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",
+    "@types/pg": "^8.23.1",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "vitest": "^3.2.7"
   },
   "dependencies": {
+    "pg": "^8.23.1",
     "zod": "^3.25.76"
   }
 }

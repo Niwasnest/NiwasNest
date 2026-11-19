@@ -1,5 +1,7 @@
-// In-memory store used by tests and dry runs. The Postgres store (db/migrations) implements
-// the same shape; agents only ever talk to `GrowthStore`, never to a database driver.
+// GrowthStore: the working set agents operate on. Every mutation goes through a method here,
+// which (a) updates memory and (b) forwards the change to an optional StoreSink (Postgres).
+// Call `await store.flush()` to make sure everything reached the database.
+import { randomUUID } from "node:crypto";
 import type { CommercialPolicy, Offer } from "../core/policy";
 import type { ContactAttempt, ContactConsent, Lead, LeadStatus } from "../core/types";
 import type { AgentAction } from "../core/permissions";
@@ -51,8 +53,18 @@ export interface Expense {
   incurredOn: Date;
 }
 
-let seq = 0;
-const id = (p: string) => `${p}_${(++seq).toString(36)}${Date.now().toString(36).slice(-4)}`;
+/** Receives every change. Implementations must not throw synchronously. */
+export interface StoreSink {
+  leadInserted(l: Lead): Promise<void>;
+  leadUpdated(l: Lead): Promise<void>;
+  event(e: LeadEvent): Promise<void>;
+  consent(c: ContactConsent): Promise<void>;
+  attempt(a: ContactAttempt): Promise<void>;
+  action(a: AgentActionLog): Promise<void>;
+  approvalInserted(a: Approval): Promise<void>;
+  approvalUpdated(a: Approval): Promise<void>;
+  expense(e: Expense): Promise<void>;
+}
 
 export class GrowthStore {
   leads = new Map<string, Lead>();
@@ -66,16 +78,69 @@ export class GrowthStore {
   expenses: Expense[] = [];
   killSwitch = { global: false, agents: new Set<string>() };
 
+  private pending: Promise<void>[] = [];
+  errors: Error[] = [];
+  constructor(private sink?: StoreSink) {}
+
+  private emit(p: (s: StoreSink) => Promise<void>) {
+    if (!this.sink) return;
+    // Chain writes so they reach the database in the order they happened
+    // (a lead must exist before its events).
+    const prev = this.pending[this.pending.length - 1] ?? Promise.resolve();
+    this.pending.push(prev.then(() => p(this.sink!)).catch((e: Error) => { this.errors.push(e); }));
+  }
+
+  /** Waits for all writes. Throws if any write failed, so callers never report unsaved work as done. */
+  async flush(): Promise<void> {
+    await Promise.all(this.pending);
+    this.pending = [];
+    if (this.errors.length) {
+      const msg = this.errors.map((e) => e.message).join("; ");
+      this.errors = [];
+      throw new Error(`database write failed: ${msg}`);
+    }
+  }
+
   createLead(input: Omit<Lead, "id" | "createdAt" | "status" | "optedOut"> & Partial<Pick<Lead, "status">>, actor: string):
     { lead: Lead; duplicates: DuplicateMatch[]; created: boolean } {
     const phone = normalizeIndianPhone(input.phoneE164) ?? undefined;
     const duplicates = findDuplicates({ ...input, phoneE164: phone }, [...this.leads.values()]);
     const exact = duplicates.find((d) => d.score >= 0.95);
     if (exact) return { lead: this.leads.get(exact.leadId)!, duplicates, created: false };
-    const lead: Lead = { ...input, phoneE164: phone, id: id("lead"), status: input.status ?? "new_lead", optedOut: false, createdAt: new Date() };
+    const lead: Lead = { ...input, phoneE164: phone, id: randomUUID(), status: input.status ?? "new_lead", optedOut: false, createdAt: new Date() };
     this.leads.set(lead.id, lead);
-    this.events.push({ leadId: lead.id, at: new Date(), actor, type: "created", to: lead.status });
+    this.emit((s) => s.leadInserted(lead));
+    this.addEvent({ leadId: lead.id, at: new Date(), actor, type: "created", to: lead.status });
     return { lead, duplicates, created: true };
+  }
+
+  /** Persist field changes made to a lead (follow-up dates, last contact, notes…). */
+  saveLead(lead: Lead) {
+    this.leads.set(lead.id, lead);
+    const snapshot = { ...lead };
+    this.emit((s) => s.leadUpdated(snapshot));
+  }
+
+  addEvent(e: LeadEvent) {
+    this.events.push(e);
+    this.emit((s) => s.event(e));
+  }
+
+  addConsent(c: ContactConsent) {
+    this.consents.push(c);
+    this.emit((s) => s.consent(c));
+  }
+
+  addAttempt(a: ContactAttempt) {
+    this.attempts.push(a);
+    this.emit((s) => s.attempt(a));
+  }
+
+  addExpense(e: Omit<Expense, "id">): Expense {
+    const ex = { ...e, id: randomUUID() };
+    this.expenses.push(ex);
+    this.emit((s) => s.expense(ex));
+    return ex;
   }
 
   setStatus(leadId: string, to: LeadStatus, actor: string, actorType: TransitionActor, detail?: string): { ok: boolean; reason?: string } {
@@ -86,31 +151,35 @@ export class GrowthStore {
     const from = lead.status;
     lead.status = to;
     if (to === "do_not_contact") lead.optedOut = true;
-    this.events.push({ leadId, at: new Date(), actor, type: "status_changed", from, to, detail });
+    this.saveLead(lead);
+    this.addEvent({ leadId, at: new Date(), actor, type: "status_changed", from, to, detail });
     return { ok: true };
   }
 
   recordOptOut(leadId: string, evidence: string, actor: string) {
     const lead = this.leads.get(leadId);
     if (!lead) return;
-    lead.optedOut = true;
     for (const channel of ["call", "whatsapp", "sms", "email"] as const) {
-      this.consents.push({ phoneE164: lead.phoneE164, email: lead.email, channel, granted: false, evidence, capturedAt: new Date() });
+      this.addConsent({ phoneE164: lead.phoneE164, email: lead.email, channel, granted: false, evidence, capturedAt: new Date() });
     }
     const from = lead.status;
+    lead.optedOut = true;
     lead.status = "do_not_contact";
-    this.events.push({ leadId, at: new Date(), actor, type: "status_changed", from, to: "do_not_contact", detail: evidence });
+    this.saveLead(lead);
+    this.addEvent({ leadId, at: new Date(), actor, type: "status_changed", from, to: "do_not_contact", detail: evidence });
   }
 
   log(entry: Omit<AgentActionLog, "id" | "at">): AgentActionLog {
-    const e = { ...entry, id: id("act"), at: new Date() };
+    const e = { ...entry, id: randomUUID(), at: new Date() };
     this.actions.push(e);
+    this.emit((s) => s.action(e));
     return e;
   }
 
   requestApproval(a: Omit<Approval, "id" | "createdAt" | "status">): Approval {
-    const ap: Approval = { ...a, id: id("apr"), createdAt: new Date(), status: "pending" };
+    const ap: Approval = { ...a, id: randomUUID(), createdAt: new Date(), status: "pending" };
     this.approvals.push(ap);
+    this.emit((s) => s.approvalInserted(ap));
     return ap;
   }
 
@@ -120,6 +189,7 @@ export class GrowthStore {
     ap.status = decision;
     ap.decidedBy = by;
     ap.decidedAt = new Date();
+    this.emit((s) => s.approvalUpdated(ap));
     return ap;
   }
 

@@ -164,8 +164,9 @@ export const TOOLS: Record<string, Tool> = {
       }
       try {
         const { providerRef } = await ctx.sender.send(l, channel, { templateKey: str(args.template_key) || undefined, text: str(args.text) || undefined });
-        ctx.store.attempts.push({ leadId: l.id, channel, at: ctx.now() });
+        ctx.store.addAttempt({ leadId: l.id, channel, at: ctx.now() });
         l.lastContactAt = ctx.now();
+        ctx.store.saveLead(l);
         ctx.store.log({ agentKey: ctx.agentKey, action: "send_routine_message", input: args, result: "done", providerRef });
         return `SENT (${providerRef})`;
       } catch (e) {
@@ -187,7 +188,8 @@ export const TOOLS: Record<string, Tool> = {
       if (!p.ok) return p.message;
       const l = lead(ctx, args);
       l.nextFollowUpAt = new Date(ctx.now().getTime() + Number(args.in_hours) * 3_600_000);
-      ctx.store.events.push({ leadId: l.id, at: ctx.now(), actor: ctx.agentKey, type: "note", detail: `follow-up: ${str(args.note)}` });
+      ctx.store.saveLead(l);
+      ctx.store.addEvent({ leadId: l.id, at: ctx.now(), actor: ctx.agentKey, type: "note", detail: `follow-up: ${str(args.note)}` });
       ctx.store.log({ agentKey: ctx.agentKey, action: "schedule_followup", input: args, result: "done", providerRef: "crm" });
       return `SCHEDULED for ${l.nextFollowUpAt.toISOString()}`;
     },

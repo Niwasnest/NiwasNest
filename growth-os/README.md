@@ -29,7 +29,9 @@ It does not change, deploy into or share a database with the live NiwasNest app.
 | Gemini adapter (model is swappable) | `src/agents/llm.ts` | written, needs API key |
 | Main-app bridge (read allowlist, writes off) | `src/integrations/niwasnest-api.ts` | ✅ tested |
 | Morning brief, funnel, campaign ROI, locality gaps | `src/planning/daily-plan.ts` | ✅ demo |
-| Postgres schema (own DB, append-only audit) | `db/migrations/0001_growth_os.sql` | written, not yet applied |
+| Postgres schema (own DB, RLS, append-only audit) | `db/migrations/*.sql` | ✅ applied to Supabase |
+| Database persistence (every change written through; `flush()` fails loudly) | `src/store/postgres.ts`, `src/store/sql.ts` | ✅ tested + live round-trip |
+| Lead import from spreadsheet (CSV) with dedupe + evidenced consent | `src/planning/import-leads.ts`, `templates/leads-template.csv` | ✅ tested |
 
 ### Safety built into the code, not the prompt
 - **Number guard:** a reply containing a ₹ amount or % that did not come from an approved source in that turn is replaced with "let me confirm".
@@ -42,7 +44,11 @@ It does not change, deploy into or share a database with the live NiwasNest app.
 npm install
 npm test           # 48 tests
 npm run typecheck
-npm run brief      # morning brief (demo data until DB is connected)
+npm run migrate                                  # apply new db/migrations
+npm run brief                                    # morning brief from the database (--demo for sample data)
+npm run import:leads -- leads.csv [--dry-run]    # add PG owners from a spreadsheet
+npm run approvals                                # list what is waiting for you
+npm run approvals -- approve <id> "Your Name"    # or: reject <id> "Your Name"
 npm run kb:check   # validate knowledge base; scripts may not contain ₹/% figures
 ```
 
@@ -54,8 +60,10 @@ npm run kb:check   # validate knowledge base; scripts may not contain ₹/% figu
 5. Enter the one active commission policy in `commercial_policies` with its approved wording.
 6. Channels, in this order: WhatsApp Business (Meta verification + templates) → inbound / missed-call number → outbound AI voice (Exotel/MyOperator + TRAI/DLT registration, confirmed by counsel).
 
+## Running in the Claude cloud sandbox
+Node's `fetch` needs `NODE_USE_ENV_PROXY=1 NODE_EXTRA_CA_CERTS=/root/.ccr/ca-bundle.crt` here; credentials are injected by the sandbox proxy (use `SUPABASE_ACCESS_TOKEN=proxy-injected`). Not needed on a normal server.
+
 ## Next build steps
-- Postgres-backed store (same interface as `src/store/memory.ts`).
 - WhatsApp Cloud API webhook + sender (implements `ChannelSender`).
 - Small admin web UI on its own subdomain: approvals inbox, kill switch, brief, leads.
 - QR redirect service (`/q/:code` → niwasnest.com with UTM) feeding `qr_scans`.

@@ -1,0 +1,2 @@
+owner_name,pg_name,phone,email,address,locality,city,property_type,total_beds,vacant_beds,rent_min,rent_max,language,source,tracking_code,consent_call,consent_whatsapp,consent_evidence,notes
+Ravi Kumar,Sri Sai PG for Men,98480 12345,,"12, 3rd Cross, BTM 2nd Stage",BTM Layout,Bengaluru,male,40,6,7500,11000,te,field_visit,,yes,yes,"Agreed in person to calls/WhatsApp, field visit 19-Nov by Founder",Owner prefers evening calls
