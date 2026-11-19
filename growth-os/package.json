@@ -11,7 +11,10 @@
     "kb:check": "tsx src/cli/kb-check.ts",
     "migrate": "tsx src/cli/migrate.ts",
     "import:leads": "tsx src/cli/import-leads.ts",
-    "approvals": "tsx src/cli/approvals.ts"
+    "approvals": "tsx src/cli/approvals.ts",
+    "start": "tsx src/web/server.ts",
+    "hash-password": "tsx src/cli/hash-password.ts",
+    "demo": "tsx src/web/demo.ts"
   },
   "engines": {
     "node": ">=20"
@@ -24,6 +27,8 @@
     "vitest": "^3.2.7"
   },
   "dependencies": {
+    "@hono/node-server": "^1.19.19",
+    "hono": "^4.13.19",
     "pg": "^8.23.1",
     "zod": "^3.25.76"
   }

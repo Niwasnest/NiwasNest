@@ -39,6 +39,25 @@ It does not change, deploy into or share a database with the live NiwasNest app.
 - **Nothing is reported as sent** without a provider confirmation ID. With no provider configured, every send is a logged dry run.
 - **Human-only actions:** listing approval, agreements, identity documents and record deletion. Money and offers go to the founder's approval queue.
 
+## Founder console (web, phone-friendly)
+Pages: **Today** (funnel, today's call list with Call/WhatsApp buttons, onboarding to chase, campaign ROI, area gaps) ·
+**Approvals** (approve/reject) · **Leads** (search, status, follow-ups, consent, opt-out) · **+ Lead** · **Import** (CSV preview → import) ·
+**AI activity** (audit log) · **Controls** (global kill switch + per-agent pause).
+
+Security: single founder login (scrypt hash), signed HttpOnly SameSite=Strict cookie, CSRF token on every form,
+login throttling, strict CSP, `noindex`, all output HTML-escaped. Nobody can set Approved/Live by hand here.
+
+```bash
+npm run demo           # sample data in memory, password "demo-password" → http://localhost:8788
+npm run hash-password  # creates ADMIN_PASSWORD_HASH for your real password
+npm start              # real console on the Growth OS database (needs .env)
+```
+
+### Deploy (e.g. Render or Railway, ~10 min)
+1. New Web Service from this GitHub repo, root directory `growth-os`, build `npm ci`, start `npm start`.
+2. Environment: `DATABASE_URL` (Supabase → Connect → Transaction pooler, Mumbai), `ADMIN_PASSWORD_HASH`, `SESSION_SECRET` (48+ random chars), `ADMIN_NAME`.
+3. Point a subdomain such as `grow.niwasnest.com` at it (a DNS CNAME; no change to the main app).
+
 ## Commands
 ```bash
 npm install
